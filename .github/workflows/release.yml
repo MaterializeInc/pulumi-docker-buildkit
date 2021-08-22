@@ -1,0 +1,32 @@
+name: goreleaser
+
+on:
+  push:
+    tags: ["*"]
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      # https://github.com/actions/checkout/issues/290
+      - run: git fetch --force --tags
+      - uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
+      - uses: goreleaser/goreleaser-action@v2
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --rm-dist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: make python-sdk
+      - run: python setup.py build sdist
+        working-directory: sdk/python
+      - uses: pypa/gh-action-pypi-publish@master
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages_dir: sdk/python/dist/

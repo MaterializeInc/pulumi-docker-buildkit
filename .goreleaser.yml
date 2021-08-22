@@ -1,0 +1,17 @@
+archives:
+  - id: archive
+    name_template: "{{ .Binary }}-{{ .Tag }}-{{ .Os }}-{{ .Arch }}"
+builds:
+  - goarch:
+      - amd64
+      - arm64
+    goos:
+      - darwin
+      - windows
+      - linux
+    main: ./cmd/pulumi-resource-docker-buildkit
+    binary: pulumi-resource-docker-buildkit
+    ldflags:
+      - -X main.version={{.Tag}}
+changelog:
+  skip: true

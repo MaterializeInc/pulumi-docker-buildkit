@@ -1,0 +1,6 @@
+name: docker-buildkit-aws-python
+description: Demonstrate Docker Buildkit usage with AWS and Python.
+runtime:
+  name: python
+  options:
+    virtualenv: venv
