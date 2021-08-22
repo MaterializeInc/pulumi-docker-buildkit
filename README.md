@@ -17,7 +17,7 @@ with the official Docker provider:
 
 It also provides several new features:
 
-* Support for cross-building images (e.g., building a `linux/arm64` machine on
+* Support for cross-building images (e.g., building a `linux/arm64` image on
   a `linux/amd64` host.)
 * Automatic inline caching.
 
