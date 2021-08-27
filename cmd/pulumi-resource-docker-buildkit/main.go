@@ -260,12 +260,22 @@ func (k *dockerBuildkitProvider) dockerBuild(
 	}
 
 	cmd = exec.Command("docker", "images", "--format", "{{.Digest}}", name)
-	digestB, err := cmd.CombinedOutput()
+	digestB, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("docker inspect failed: %s: %s", err, string(digestB))
+		var output string
+		if err, ok := err.(*exec.ExitError); ok {
+			output = string(err.Stderr)
+		}
+		return nil, fmt.Errorf("docker images failed: %s: %s", err, output)
 	}
 	digest := strings.TrimSpace(string(digestB))
 	repoDigest := fmt.Sprintf("%s@%s", name, digest)
+
+	cmd = exec.Command("docker", "images", "--format", "present", repoDigest)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("docker image %#v could not be retrieved: %v: %v", repoDigest, err, string(output))
+	}
 
 	outputs := map[string]interface{}{
 		"dockerfile":     dockerfile,
