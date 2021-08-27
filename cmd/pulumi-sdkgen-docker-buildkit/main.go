@@ -77,7 +77,11 @@ func run(version string) error {
 							TypeSpec:    schema.TypeSpec{Type: "string"},
 						},
 						"imageDigest": {
-							Description: "The digest of the image manifest.",
+							Description: "The fully-qualified digest of the image manifest.",
+							TypeSpec:    schema.TypeSpec{Type: "string"},
+						},
+						"digest": {
+							Description: "The bare digest of the image manifest without the docker registry prefix",
 							TypeSpec:    schema.TypeSpec{Type: "string"},
 						},
 						"registryServer": {
