@@ -98,6 +98,7 @@ func (k *dockerBuildkitProvider) Diff(ctx context.Context, req *rpc.DiffRequest)
 	if err != nil {
 		return nil, err
 	}
+	delete(olds, "digest")
 	delete(olds, "imageDigest")
 
 	news, err := plugin.UnmarshalProperties(req.GetNews(), plugin.MarshalOptions{KeepUnknowns: true, SkipNulls: true})
