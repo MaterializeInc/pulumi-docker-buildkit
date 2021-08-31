@@ -260,7 +260,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		return nil, fmt.Errorf("docker build failed: %w", err)
 	}
 
-	cmd = exec.Command("docker", "images", "--format", "{{.Digest}}", name)
+	cmd = exec.Command("docker", "inspect", "--format", "{{index .RepoDigests 0}}", name)
 	digestB, err := cmd.Output()
 	if err != nil {
 		var output string
@@ -269,8 +269,8 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		}
 		return nil, fmt.Errorf("docker images failed: %s: %s", err, output)
 	}
-	digest := strings.TrimSpace(string(digestB))
-	repoDigest := fmt.Sprintf("%s@%s", name, digest)
+	repoDigest := strings.TrimSpace(string(digestB))
+	digest := strings.Split(repoDigest, "@")[1]
 
 	cmd = exec.Command("docker", "images", "--format", "present", repoDigest)
 	output, err := cmd.CombinedOutput()
