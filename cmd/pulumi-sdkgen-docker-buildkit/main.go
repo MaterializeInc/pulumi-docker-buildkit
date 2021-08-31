@@ -76,8 +76,8 @@ func run(version string) error {
 							Description: "The digest of the build context.",
 							TypeSpec:    schema.TypeSpec{Type: "string"},
 						},
-						"imageDigest": {
-							Description: "The digest of the image manifest.",
+						"repoDigest": {
+							Description: "The digest of the image manifest in the registry.",
 							TypeSpec:    schema.TypeSpec{Type: "string"},
 						},
 						"registryServer": {
@@ -87,7 +87,7 @@ func run(version string) error {
 					},
 					Required: []string{
 						"dockerfile", "context", "name", "platforms",
-						"contextDigest", "imageDigest", "registryServer",
+						"contextDigest", "repoDigest", "registryServer",
 					},
 				},
 				InputProperties: map[string]schema.PropertySpec{

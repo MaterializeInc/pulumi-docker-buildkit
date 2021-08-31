@@ -98,7 +98,7 @@ func (k *dockerBuildkitProvider) Diff(ctx context.Context, req *rpc.DiffRequest)
 	if err != nil {
 		return nil, err
 	}
-	delete(olds, "imageDigest")
+	delete(olds, "repoDigest")
 
 	news, err := plugin.UnmarshalProperties(req.GetNews(), plugin.MarshalOptions{KeepUnknowns: true, SkipNulls: true})
 	if err != nil {
@@ -271,7 +271,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		"name":           name,
 		"platforms":      platforms,
 		"contextDigest":  contextDigest,
-		"imageDigest":    strings.TrimSpace(string(repoDigest)),
+		"repoDigest":     strings.TrimSpace(string(repoDigest)),
 		"registryServer": registry["server"].StringValue(),
 	}
 	return plugin.MarshalProperties(
