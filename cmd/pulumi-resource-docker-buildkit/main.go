@@ -259,13 +259,11 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		return nil, fmt.Errorf("docker build failed: %w", err)
 	}
 
-	cmd = exec.Command("docker", "images", "--format", "{{.Digest}}", name)
-	digestB, err := cmd.CombinedOutput()
+	cmd = exec.Command("docker", "inspect", name, "-f", "{{index .RepoDigests 0}}")
+	repoDigest, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("docker inspect failed: %s: %s", err, string(digestB))
+		return nil, fmt.Errorf("docker inspect failed: %s: %s", err, string(repoDigest))
 	}
-	digest := strings.TrimSpace(string(digestB))
-	repoDigest := fmt.Sprintf("%s@%s", name, digest)
 
 	outputs := map[string]interface{}{
 		"dockerfile":     dockerfile,
@@ -273,8 +271,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		"name":           name,
 		"platforms":      platforms,
 		"contextDigest":  contextDigest,
-		"imageDigest":    repoDigest,
-		"digest":         digest,
+		"imageDigest":    strings.TrimSpace(string(repoDigest)),
 		"registryServer": registry["server"].StringValue(),
 	}
 	return plugin.MarshalProperties(
