@@ -18,15 +18,19 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/docker/pkg/fileutils"
+	"github.com/docker/docker/api/types"
+	docker "github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/jsonmessage"
 	pbempty "github.com/golang/protobuf/ptypes/empty"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/moby/buildkit/frontend/dockerfile/dockerignore"
@@ -43,8 +47,16 @@ var version string
 
 func main() {
 	err := provider.Main("docker-buildkit", func(host *provider.HostClient) (rpc.ResourceProviderServer, error) {
+		client, err := docker.NewClientWithOpts()
+		if err != nil {
+			return nil, err
+		}
+		if err = docker.FromEnv(client); err != nil {
+			return nil, err
+		}
 		return &dockerBuildkitProvider{
-			host: host,
+			host:   host,
+			client: client,
 		}, nil
 	})
 	if err != nil {
@@ -53,7 +65,8 @@ func main() {
 }
 
 type dockerBuildkitProvider struct {
-	host *provider.HostClient
+	host   *provider.HostClient
+	client *docker.Client
 }
 
 func (k *dockerBuildkitProvider) CheckConfig(ctx context.Context, req *rpc.CheckRequest) (*rpc.CheckResponse, error) {
@@ -231,42 +244,66 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		return nil, err
 	}
 
+	var authToken string
 	if !username.IsNull() && !password.IsNull() {
-		cmd := exec.Command(
-			"docker", "login",
-			"-u", username.StringValue(), "--password-stdin",
-			registry["server"].StringValue(),
-		)
-		cmd.Stdin = strings.NewReader(password.StringValue())
-		if err := runCommand(ctx, k.host, urn, cmd); err != nil {
-			return nil, fmt.Errorf("docker login failed: %w", err)
+		auth := types.AuthConfig{
+			Username:      username.StringValue(),
+			Password:      password.StringValue(),
+			ServerAddress: registry["server"].StringValue(),
 		}
+		_, err := k.client.RegistryLogin(ctx, auth)
+		if err != nil {
+			return nil, fmt.Errorf("docker login failed: %v", err)
+		}
+		authConfigBytes, _ := json.Marshal(auth)
+		authToken = base64.URLEncoding.EncodeToString(authConfigBytes)
 	}
 
 	var platforms []string
 	for _, v := range inputs["platforms"].ArrayValue() {
 		platforms = append(platforms, v.StringValue())
 	}
-	cmd := exec.Command(
-		"docker", "buildx", "build",
-		"--platform", strings.Join(platforms, ","),
-		"--cache-from", name,
-		"--cache-to", "type=inline",
-		"-f", filepath.Join(context, dockerfile),
-		"-t", name, "--push",
-		context,
-	)
-	if err := runCommand(ctx, k.host, urn, cmd); err != nil {
-		return nil, fmt.Errorf("docker build failed: %w", err)
+	buildCtx, err := buildContext(context)
+	if err != nil {
+		return nil, fmt.Errorf("could not assemble docker build context for %#v: %v", context, err)
+	}
+	imageBuild := types.ImageBuildOptions{
+		Tags:       []string{name},
+		Dockerfile: dockerfile,
+		Context:    buildCtx,
+		Version:    types.BuilderBuildKit,
+		Remove:     true,
+		CacheFrom:  []string{name},
+		Platform:   strings.Join(platforms, ","),
+		// TODO: I don't know how to get --cache-to=type=internal set here /:
+	}
+	res, buildErr := k.client.ImageBuild(ctx, buildCtx, imageBuild)
+	if buildErr != nil {
+		return nil, fmt.Errorf("image build failed: %v", buildErr)
+	}
+	defer res.Body.Close()
+	if err = streamResponse(ctx, k.host, urn, diag.Info, diag.Error, res.Body); err != nil {
+		return nil, fmt.Errorf("could not stream build response: %v", err)
 	}
 
-	cmd = exec.Command("docker", "inspect", name, "-f", `{{join .RepoDigests "\n"}}`)
-	repoDigests, err := cmd.CombinedOutput()
+	pushRes, pushErr := k.client.ImagePush(ctx, name, types.ImagePushOptions{
+		RegistryAuth: authToken,
+		Platform:     strings.Join(platforms, ","),
+	})
+	if pushErr != nil {
+		return nil, fmt.Errorf("image push failed: %v", pushErr)
+	}
+	if err = streamResponse(ctx, k.host, urn, diag.Info, diag.Error, pushRes); err != nil {
+		return nil, fmt.Errorf("could not stream push response: %v", err)
+	}
+	defer pushRes.Close()
+
+	inspect, _, err := k.client.ImageInspectWithRaw(ctx, name)
 	if err != nil {
-		return nil, fmt.Errorf("docker inspect failed: %s: %s", err, string(repoDigests))
+		return nil, fmt.Errorf("docker inspect failed: %v", err)
 	}
 	var repoDigest string
-	for _, line := range strings.Split(string(repoDigests), "\n") {
+	for _, line := range inspect.RepoDigests {
 		repo := strings.Split(line, "@")[0]
 		if repo == baseName {
 			repoDigest = line
@@ -274,11 +311,11 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		}
 	}
 	if repoDigest == "" {
-		return nil, fmt.Errorf("failed to find repo digest in docker inspect output: %s", repoDigests)
+		return nil, fmt.Errorf("failed to find repo digest for %#v in docker inspect : %v", name, inspect.RepoDigests)
 	}
 
 	outputs := map[string]interface{}{
-		"dockerfile":     dockerfile,
+		"dockerfile":     filepath.Join(context, dockerfile),
 		"context":        context,
 		"name":           name,
 		"platforms":      platforms,
@@ -292,33 +329,32 @@ func (k *dockerBuildkitProvider) dockerBuild(
 	)
 }
 
+func streamResponse(ctx context.Context, host *provider.HostClient, urn resource.URN, okSev diag.Severity, errSev diag.Severity, jsonIn io.Reader) error {
+	// TODO: find out how to use DisplayJSONMessagesStream instead of hand-knitting ours.
+	dec := json.NewDecoder(jsonIn)
+	for {
+		var m jsonmessage.JSONMessage
+		err := dec.Decode(&m)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+		if m.Error != nil {
+			host.Log(ctx, errSev, urn, m.ErrorMessage)
+		} else {
+			host.Log(ctx, okSev, urn, m.ProgressMessage) // TODO: log more progress data
+		}
+	}
+	return nil
+}
+
 func applyDefaults(inputs resource.PropertyMap) {
 	if inputs["platforms"].IsNull() {
 		inputs["platforms"] = resource.NewArrayProperty(
 			[]resource.PropertyValue{resource.NewStringProperty("linux/amd64")},
 		)
 	}
-}
-
-func runCommand(
-	ctx context.Context,
-	host *provider.HostClient,
-	urn resource.URN,
-	cmd *exec.Cmd,
-) error {
-	cmd.Stdout = &logWriter{
-		ctx:      ctx,
-		host:     host,
-		urn:      urn,
-		severity: diag.Info,
-	}
-	cmd.Stderr = &logWriter{
-		ctx:      ctx,
-		host:     host,
-		urn:      urn,
-		severity: diag.Info,
-	}
-	return cmd.Run()
 }
 
 type logWriter struct {
@@ -333,62 +369,24 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 }
 
 func hashContext(contextPath string) (string, error) {
-	dockerIgnore, err := os.ReadFile(filepath.Join(contextPath, ".dockerignore"))
-	if err != nil && !os.IsNotExist(err) {
-		return "", fmt.Errorf("unable to read .dockerignore file: %w", err)
-	}
-	ignorePatterns, err := dockerignore.ReadAll(bytes.NewReader(dockerIgnore))
-	if err != nil {
-		return "", fmt.Errorf("unable to parse .dockerignore file: %w", err)
-	}
-	ignoreMatcher, err := fileutils.NewPatternMatcher(ignorePatterns)
-	if err != nil {
-		return "", fmt.Errorf("unable to load rules from .dockerignore: %w", err)
-	}
-	var hashInput []byte
-	err = filepath.WalkDir(contextPath, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		path, err = filepath.Rel(contextPath, path)
-		if err != nil {
-			return err
-		}
-		if path == "." {
-			return nil
-		}
-		ignore, err := ignoreMatcher.Matches(path)
-		if err != nil {
-			return fmt.Errorf(".dockerignore rule failed: %w", err)
-		}
-		if ignore {
-			if d.IsDir() {
-				return filepath.SkipDir
-			} else {
-				return nil
-			}
-		} else if d.IsDir() {
-			return nil
-		}
-		f, err := os.Open(filepath.Join(contextPath, path))
-		if err != nil {
-			return fmt.Errorf("open %s: %w", path, err)
-		}
-		defer f.Close()
-		h := sha256.New()
-		_, err = io.Copy(h, f)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", path, err)
-		}
-		hashInput = append(hashInput, path...)
-		hashInput = append(hashInput, h.Sum(nil)...)
-		hashInput = append(hashInput, byte(0))
-		return nil
-	})
+	context, err := buildContext(contextPath)
 	if err != nil {
 		return "", fmt.Errorf("unable to hash build context: %w", err)
 	}
+	defer context.Close()
 	h := sha256.New()
-	h.Write(hashInput)
+	io.Copy(h, context)
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func buildContext(contextPath string) (io.ReadCloser, error) {
+	dockerIgnore, err := os.ReadFile(filepath.Join(contextPath, ".dockerignore"))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("unable to read .dockerignore file: %w", err)
+	}
+	ignorePatterns, err := dockerignore.ReadAll(bytes.NewReader(dockerIgnore))
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse .dockerignore file: %w", err)
+	}
+	return archive.TarWithOptions(contextPath, &archive.TarOptions{ExcludePatterns: ignorePatterns})
 }
