@@ -20,5 +20,5 @@ image = docker_buildkit.Image(
     name=repo.repository_url,
     registry=repo.registry_id.apply(get_registry_info),
 )
-pulumi.export("image", image.image_digest)
+pulumi.export("image", image.repo_digest)
 

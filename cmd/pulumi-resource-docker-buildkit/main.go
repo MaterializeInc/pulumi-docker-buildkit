@@ -219,6 +219,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 	}
 	applyDefaults(inputs)
 	name := inputs["name"].StringValue()
+	baseName := strings.Split(name, ":")[0]
 	context := inputs["context"].StringValue()
 	dockerfile := inputs["dockerfile"].StringValue()
 	registry := inputs["registry"].ObjectValue()
@@ -259,10 +260,21 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		return nil, fmt.Errorf("docker build failed: %w", err)
 	}
 
-	cmd = exec.Command("docker", "inspect", name, "-f", "{{index .RepoDigests 0}}")
-	repoDigest, err := cmd.CombinedOutput()
+	cmd = exec.Command("docker", "inspect", name, "-f", `{{join .RepoDigests "\n"}}`)
+	repoDigests, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("docker inspect failed: %s: %s", err, string(repoDigest))
+		return nil, fmt.Errorf("docker inspect failed: %s: %s", err, string(repoDigests))
+	}
+	var repoDigest string
+	for _, line := range strings.Split(string(repoDigests), "\n") {
+		repo := strings.Split(line, "@")[0]
+		if repo == baseName {
+			repoDigest = line
+			break
+		}
+	}
+	if repoDigest == "" {
+		return nil, fmt.Errorf("failed to find repo digest in docker inspect output: %s", repoDigests)
 	}
 
 	outputs := map[string]interface{}{
@@ -271,7 +283,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		"name":           name,
 		"platforms":      platforms,
 		"contextDigest":  contextDigest,
-		"repoDigest":     strings.TrimSpace(string(repoDigest)),
+		"repoDigest":     repoDigest,
 		"registryServer": registry["server"].StringValue(),
 	}
 	return plugin.MarshalProperties(
