@@ -109,7 +109,10 @@ func (k *dockerBuildkitProvider) Diff(ctx context.Context, req *rpc.DiffRequest)
 	applyDefaults(news)
 	news["registryServer"] = news["registry"].ObjectValue()["server"]
 	delete(news, "registry")
-	contextDigest, err := hashContext(news["context"].StringValue())
+	contextDigest, err := hashContext(
+		news["context"].StringValue(),
+		news["dockerfile"].StringValue(),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +231,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 	username := registry["username"]
 	password := registry["password"]
 
-	contextDigest, err := hashContext(context)
+	contextDigest, err := hashContext(context, dockerfile)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +343,7 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 	return len(p), w.host.Log(w.ctx, w.severity, w.urn, string(p))
 }
 
-func hashContext(contextPath string) (string, error) {
+func hashContext(contextPath string, dockerfile string) (string, error) {
 	dockerIgnore, err := os.ReadFile(filepath.Join(contextPath, ".dockerignore"))
 	if err != nil && !os.IsNotExist(err) {
 		return "", fmt.Errorf("unable to read .dockerignore file: %w", err)
@@ -395,6 +398,24 @@ func hashContext(contextPath string) (string, error) {
 	})
 	if err != nil {
 		return "", fmt.Errorf("unable to hash build context: %w", err)
+	}
+	// Add the Dockerfile hash directly, since it might not be in the build
+	// context.
+	{
+		path := filepath.Join(contextPath, dockerfile)
+		f, err := os.Open(path)
+		if err != nil {
+			return "", fmt.Errorf("open %s: %w", path, err)
+		}
+		defer f.Close()
+		h := sha256.New()
+		_, err = io.Copy(h, f)
+		if err != nil {
+			return "", fmt.Errorf("read %s: %w", path, err)
+		}
+		hashInput = append(hashInput, path...)
+		hashInput = append(hashInput, h.Sum(nil)...)
+		hashInput = append(hashInput, byte(0))
 	}
 	h := sha256.New()
 	h.Write(hashInput)
