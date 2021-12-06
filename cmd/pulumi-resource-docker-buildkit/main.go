@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/docker/cli/cli/command/image/build"
 	pbempty "github.com/golang/protobuf/ptypes/empty"
@@ -51,7 +52,8 @@ func main() {
 }
 
 type dockerBuildkitProvider struct {
-	host *provider.HostClient
+	host      *provider.HostClient
+	loginLock sync.Mutex
 }
 
 func (k *dockerBuildkitProvider) CheckConfig(ctx context.Context, req *rpc.CheckRequest) (*rpc.CheckResponse, error) {
@@ -236,7 +238,13 @@ func (k *dockerBuildkitProvider) dockerBuild(
 			registry["server"].StringValue(),
 		)
 		cmd.Stdin = strings.NewReader(password.StringValue())
-		if err := runCommand(ctx, k.host, urn, cmd); err != nil {
+		// On macOS, it seems simultaneous invocations of `docker login` can
+		// fail. See #6. Use a lock to prevent multiple `dockerBuild` requests
+		// from calling `docker login` simultaneously.
+		k.loginLock.Lock()
+		err := runCommand(ctx, k.host, urn, cmd)
+		k.loginLock.Unlock()
+		if err != nil {
 			return nil, fmt.Errorf("docker login failed: %w", err)
 		}
 	}
