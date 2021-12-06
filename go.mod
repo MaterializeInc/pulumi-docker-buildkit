@@ -1,4 +1,4 @@
-module github.com/benesch/pulumi-docker-buildkit
+module github.com/MaterializeInc/pulumi-docker-buildkit
 
 go 1.16
 

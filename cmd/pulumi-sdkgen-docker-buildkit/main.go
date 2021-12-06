@@ -45,8 +45,8 @@ func run(version string) error {
 		Version:           version,
 		Description:       "A Pulumi package for building Docker images with Buildkit.",
 		License:           "Apache-2.0",
-		Repository:        "https://github.com/benesch/pulumi-docker-buildkit",
-		PluginDownloadURL: fmt.Sprintf("https://github.com/benesch/pulumi-docker-buildkit/releases/download/v%s/", version),
+		Repository:        "https://github.com/MaterializeInc/pulumi-docker-buildkit",
+		PluginDownloadURL: fmt.Sprintf("https://github.com/MaterializeInc/pulumi-docker-buildkit/releases/download/v%s/", version),
 		Provider:          schema.ResourceSpec{},
 		Resources: map[string]schema.ResourceSpec{
 			"docker-buildkit:index:Image": {
