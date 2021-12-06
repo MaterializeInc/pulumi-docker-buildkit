@@ -15,7 +15,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -26,10 +25,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/docker/pkg/fileutils"
+	"github.com/docker/cli/cli/command/image/build"
 	pbempty "github.com/golang/protobuf/ptypes/empty"
 	structpb "github.com/golang/protobuf/ptypes/struct"
-	"github.com/moby/buildkit/frontend/dockerfile/dockerignore"
 	"github.com/pulumi/pulumi/pkg/v3/resource/provider"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/diag"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
@@ -107,7 +105,7 @@ func (k *dockerBuildkitProvider) Diff(ctx context.Context, req *rpc.DiffRequest)
 	applyDefaults(news)
 	news["registryServer"] = news["registry"].ObjectValue()["server"]
 	delete(news, "registry")
-	contextDigest, err := hashContext(news["context"].StringValue())
+	contextDigest, err := hashContext(news["context"].StringValue(), news["dockerfile"].StringValue())
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +224,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 	username := registry["username"]
 	password := registry["password"]
 
-	contextDigest, err := hashContext(context)
+	contextDigest, err := hashContext(context, dockerfile)
 	if err != nil {
 		return nil, err
 	}
@@ -332,63 +330,23 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 	return len(p), w.host.Log(w.ctx, w.severity, w.urn, string(p))
 }
 
-func hashContext(contextPath string) (string, error) {
-	dockerIgnore, err := os.ReadFile(filepath.Join(contextPath, ".dockerignore"))
-	if err != nil && !os.IsNotExist(err) {
-		return "", fmt.Errorf("unable to read .dockerignore file: %w", err)
-	}
-	ignorePatterns, err := dockerignore.ReadAll(bytes.NewReader(dockerIgnore))
+func hashContext(contextPath, dockerfile string) (string, error) {
+	dr, err := os.Open(filepath.Join(contextPath, dockerfile))
 	if err != nil {
-		return "", fmt.Errorf("unable to parse .dockerignore file: %w", err)
+		return "", fmt.Errorf("could not find %q: %w", dockerfile, err)
 	}
-	ignoreMatcher, err := fileutils.NewPatternMatcher(ignorePatterns)
-	if err != nil {
-		return "", fmt.Errorf("unable to load rules from .dockerignore: %w", err)
-	}
-	var hashInput []byte
-	err = filepath.WalkDir(contextPath, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		path, err = filepath.Rel(contextPath, path)
-		if err != nil {
-			return err
-		}
-		if path == "." {
-			return nil
-		}
-		ignore, err := ignoreMatcher.Matches(path)
-		if err != nil {
-			return fmt.Errorf(".dockerignore rule failed: %w", err)
-		}
-		if ignore {
-			if d.IsDir() {
-				return filepath.SkipDir
-			} else {
-				return nil
-			}
-		} else if d.IsDir() {
-			return nil
-		}
-		f, err := os.Open(filepath.Join(contextPath, path))
-		if err != nil {
-			return fmt.Errorf("open %s: %w", path, err)
-		}
-		defer f.Close()
-		h := sha256.New()
-		_, err = io.Copy(h, f)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", path, err)
-		}
-		hashInput = append(hashInput, path...)
-		hashInput = append(hashInput, h.Sum(nil)...)
-		hashInput = append(hashInput, byte(0))
-		return nil
-	})
-	if err != nil {
-		return "", fmt.Errorf("unable to hash build context: %w", err)
-	}
+	defer dr.Close()
+
 	h := sha256.New()
-	h.Write(hashInput)
+	buildCtx, _, err := build.GetContextFromReader(dr, dockerfile)
+	if err != nil {
+		return "", fmt.Errorf("constructing buildcontext: %w", err)
+	}
+	defer buildCtx.Close()
+
+	_, err = io.Copy(h, buildCtx)
+	if err != nil {
+		return "", fmt.Errorf("reading buildcontext: %w", err)
+	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
