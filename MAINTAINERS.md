@@ -4,11 +4,9 @@ To release a new version:
 
 1. Make changes.
 
-2. Update changelog.
+2. Commit changes and push to GitHub.
 
-3. Commit changes and push to GitHub.
-
-4. Create the tag.
+3. Create the tag.
 
     ```
     version=vA.B.C
