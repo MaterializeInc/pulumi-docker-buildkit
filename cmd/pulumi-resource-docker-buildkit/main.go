@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -343,6 +344,39 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 	return len(p), w.host.Log(w.ctx, w.severity, w.urn, string(p))
 }
 
+type contextHash struct {
+	contextPath string
+	input       bytes.Buffer
+}
+
+func newContextHash(contextPath string) *contextHash {
+	return &contextHash{contextPath: contextPath}
+}
+
+func (ch *contextHash) hashPath(path string, fileMode fs.FileMode) error {
+	f, err := os.Open(filepath.Join(ch.contextPath, path))
+	if err != nil {
+		return fmt.Errorf("open %s: %w", path, err)
+	}
+	defer f.Close()
+	h := sha256.New()
+	_, err = io.Copy(h, f)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	ch.input.Write([]byte(path))
+	ch.input.Write([]byte(fileMode.String()))
+	ch.input.Write(h.Sum(nil))
+	ch.input.WriteByte(0)
+	return nil
+}
+
+func (ch *contextHash) hexSum() string {
+	h := sha256.New()
+	ch.input.WriteTo(h)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 func hashContext(contextPath string, dockerfile string) (string, error) {
 	dockerIgnore, err := os.ReadFile(filepath.Join(contextPath, ".dockerignore"))
 	if err != nil && !os.IsNotExist(err) {
@@ -356,7 +390,11 @@ func hashContext(contextPath string, dockerfile string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("unable to load rules from .dockerignore: %w", err)
 	}
-	var hashInput []byte
+	ch := newContextHash(contextPath)
+	err = ch.hashPath(dockerfile, 0)
+	if err != nil {
+		return "", fmt.Errorf("hashing dockerfile %q: %w", dockerfile, err)
+	}
 	err = filepath.WalkDir(contextPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -381,43 +419,18 @@ func hashContext(contextPath string, dockerfile string) (string, error) {
 		} else if d.IsDir() {
 			return nil
 		}
-		f, err := os.Open(filepath.Join(contextPath, path))
+		info, err := d.Info()
 		if err != nil {
-			return fmt.Errorf("open %s: %w", path, err)
+			return fmt.Errorf("determining mode for %q: %w", path, err)
 		}
-		defer f.Close()
-		h := sha256.New()
-		_, err = io.Copy(h, f)
+		err = ch.hashPath(path, info.Mode())
 		if err != nil {
-			return fmt.Errorf("read %s: %w", path, err)
+			return fmt.Errorf("hashing %q: %w", path, err)
 		}
-		hashInput = append(hashInput, path...)
-		hashInput = append(hashInput, h.Sum(nil)...)
-		hashInput = append(hashInput, byte(0))
 		return nil
 	})
 	if err != nil {
 		return "", fmt.Errorf("unable to hash build context: %w", err)
 	}
-	// Add the Dockerfile hash directly, since it might not be in the build
-	// context.
-	{
-		path := filepath.Join(contextPath, dockerfile)
-		f, err := os.Open(path)
-		if err != nil {
-			return "", fmt.Errorf("open %s: %w", path, err)
-		}
-		defer f.Close()
-		h := sha256.New()
-		_, err = io.Copy(h, f)
-		if err != nil {
-			return "", fmt.Errorf("read %s: %w", path, err)
-		}
-		hashInput = append(hashInput, path...)
-		hashInput = append(hashInput, h.Sum(nil)...)
-		hashInput = append(hashInput, byte(0))
-	}
-	h := sha256.New()
-	h.Write(hashInput)
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return ch.hexSum(), nil
 }
