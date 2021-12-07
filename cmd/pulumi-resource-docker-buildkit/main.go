@@ -15,20 +15,23 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/docker/cli/cli/command/image/build"
+	"github.com/docker/docker/pkg/fileutils"
 	pbempty "github.com/golang/protobuf/ptypes/empty"
 	structpb "github.com/golang/protobuf/ptypes/struct"
+	"github.com/moby/buildkit/frontend/dockerfile/dockerignore"
 	"github.com/pulumi/pulumi/pkg/v3/resource/provider"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/diag"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
@@ -107,7 +110,10 @@ func (k *dockerBuildkitProvider) Diff(ctx context.Context, req *rpc.DiffRequest)
 	applyDefaults(news)
 	news["registryServer"] = news["registry"].ObjectValue()["server"]
 	delete(news, "registry")
-	contextDigest, err := hashContext(news["context"].StringValue(), news["dockerfile"].StringValue())
+	contextDigest, err := hashContext(
+		news["context"].StringValue(),
+		news["dockerfile"].StringValue(),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -338,23 +344,93 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 	return len(p), w.host.Log(w.ctx, w.severity, w.urn, string(p))
 }
 
-func hashContext(contextPath, dockerfile string) (string, error) {
-	dr, err := os.Open(filepath.Join(contextPath, dockerfile))
-	if err != nil {
-		return "", fmt.Errorf("could not find %q: %w", dockerfile, err)
-	}
-	defer dr.Close()
+type contextHash struct {
+	contextPath string
+	input       bytes.Buffer
+}
 
+func newContextHash(contextPath string) *contextHash {
+	return &contextHash{contextPath: contextPath}
+}
+
+func (ch *contextHash) hashPath(path string, fileMode fs.FileMode) error {
+	f, err := os.Open(filepath.Join(ch.contextPath, path))
+	if err != nil {
+		return fmt.Errorf("open %s: %w", path, err)
+	}
+	defer f.Close()
 	h := sha256.New()
-	buildCtx, _, err := build.GetContextFromReader(dr, dockerfile)
+	_, err = io.Copy(h, f)
 	if err != nil {
-		return "", fmt.Errorf("constructing buildcontext: %w", err)
+		return fmt.Errorf("read %s: %w", path, err)
 	}
-	defer buildCtx.Close()
+	ch.input.Write([]byte(path))
+	ch.input.Write([]byte(fileMode.String()))
+	ch.input.Write(h.Sum(nil))
+	ch.input.WriteByte(0)
+	return nil
+}
 
-	_, err = io.Copy(h, buildCtx)
-	if err != nil {
-		return "", fmt.Errorf("reading buildcontext: %w", err)
+func (ch *contextHash) hexSum() string {
+	h := sha256.New()
+	ch.input.WriteTo(h)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func hashContext(contextPath string, dockerfile string) (string, error) {
+	dockerIgnore, err := os.ReadFile(filepath.Join(contextPath, ".dockerignore"))
+	if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("unable to read .dockerignore file: %w", err)
 	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	ignorePatterns, err := dockerignore.ReadAll(bytes.NewReader(dockerIgnore))
+	if err != nil {
+		return "", fmt.Errorf("unable to parse .dockerignore file: %w", err)
+	}
+	ignoreMatcher, err := fileutils.NewPatternMatcher(ignorePatterns)
+	if err != nil {
+		return "", fmt.Errorf("unable to load rules from .dockerignore: %w", err)
+	}
+	ch := newContextHash(contextPath)
+	err = ch.hashPath(dockerfile, 0)
+	if err != nil {
+		return "", fmt.Errorf("hashing dockerfile %q: %w", dockerfile, err)
+	}
+	err = filepath.WalkDir(contextPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		path, err = filepath.Rel(contextPath, path)
+		if err != nil {
+			return err
+		}
+		if path == "." {
+			return nil
+		}
+		ignore, err := ignoreMatcher.Matches(path)
+		if err != nil {
+			return fmt.Errorf(".dockerignore rule failed: %w", err)
+		}
+		if ignore {
+			if d.IsDir() {
+				return filepath.SkipDir
+			} else {
+				return nil
+			}
+		} else if d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return fmt.Errorf("determining mode for %q: %w", path, err)
+		}
+		err = ch.hashPath(path, info.Mode())
+		if err != nil {
+			return fmt.Errorf("hashing %q: %w", path, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("unable to hash build context: %w", err)
+	}
+	return ch.hexSum(), nil
 }
