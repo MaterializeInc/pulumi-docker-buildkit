@@ -7,7 +7,7 @@ sdk: bin/pulumi-sdkgen-docker-buildkit
 	rm -rf sdk
 	bin/pulumi-sdkgen-docker-buildkit $(VERSION)
 	cd sdk/python/ && \
-		sed -i.bak -e "s/\$${VERSION}/$(VERSION)/g" -e "s/\$${PLUGIN_VERSION}/$(VERSION)/g" setup.py && \
+		sed -i.bak -e "s/0.0.0/$(VERSION)/g" setup.py && \
 		rm setup.py.bak
 	cd sdk/nodejs/ && \
 		npm install && \
