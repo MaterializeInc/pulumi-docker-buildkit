@@ -15,7 +15,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -146,9 +145,14 @@ func run(version string) error {
 				},
 			},
 		},
-		Language: map[string]json.RawMessage{
-			"python": json.RawMessage("{}"),
-			"nodejs": json.RawMessage(`{"packageName": "@materializeinc/pulumi-docker-buildkit"}`),
+		Language: map[string]schema.RawMessage{
+			"python": schema.RawMessage("{}"),
+			"nodejs": schema.RawMessage(`{
+				"packageName": "@materializeinc/docker-buildkit",
+				"dependencies": {
+					"@pulumi/pulumi": "^3.0.0"
+				}
+			}`),
 		},
 	}
 	ppkg, err := schema.ImportSpec(spec, nil)

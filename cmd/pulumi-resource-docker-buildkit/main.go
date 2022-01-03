@@ -59,6 +59,10 @@ type dockerBuildkitProvider struct {
 	loginLock sync.Mutex
 }
 
+func (k *dockerBuildkitProvider) Call(ctx context.Context, req *rpc.CallRequest) (*rpc.CallResponse, error) {
+	return nil, fmt.Errorf("Call is not yet implemented")
+}
+
 func (k *dockerBuildkitProvider) CheckConfig(ctx context.Context, req *rpc.CheckRequest) (*rpc.CheckResponse, error) {
 	return &rpc.CheckResponse{Inputs: req.GetNews()}, nil
 }
