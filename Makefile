@@ -6,14 +6,18 @@ bin/pulumi-sdkgen-docker-buildkit: cmd/pulumi-sdkgen-docker-buildkit/*.go
 sdk: bin/pulumi-sdkgen-docker-buildkit
 	rm -rf sdk
 	bin/pulumi-sdkgen-docker-buildkit $(VERSION)
-	cp README.md sdk/python/
-	cp README.md sdk/nodejs/
 	cd sdk/python/ && \
 		sed -i.bak -e "s/\$${VERSION}/$(VERSION)/g" -e "s/\$${PLUGIN_VERSION}/$(VERSION)/g" setup.py && \
 		rm setup.py.bak
 	cd sdk/nodejs/ && \
-		sed -i.bak -e "s/\$${VERSION}/$(VERSION)/g" package.json && \
-		rm package.json.bak
+		npm install && \
+		npm run build && \
+		sed -e "s/\$${VERSION}/$(VERSION)/g" package.json > bin/package.json
+	mv sdk/nodejs sdk/nodejs.tmp
+	mv sdk/nodejs.tmp/bin sdk/nodejs
+	rm -r sdk/nodejs.tmp
+	cp README.md sdk/python/
+	cp README.md sdk/nodejs/
 
 .PHONY: install
 install:
