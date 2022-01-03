@@ -12,7 +12,7 @@ sdk: bin/pulumi-sdkgen-docker-buildkit
 	cd sdk/nodejs/ && \
 		npm install && \
 		npm run build && \
-		sed -e "s/\$${VERSION}/$(VERSION)/g" package.json > bin/package.json
+		awk -f ../../build/munge-package-json.awk -v version=$(VERSION) package.json > bin/package.json
 	mv sdk/nodejs sdk/nodejs.tmp
 	mv sdk/nodejs.tmp/bin sdk/nodejs
 	rm -r sdk/nodejs.tmp
