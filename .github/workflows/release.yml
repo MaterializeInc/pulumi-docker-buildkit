@@ -23,7 +23,14 @@ jobs:
           args: release --rm-dist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: make python-sdk
+      - run: make sdk
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 16.x
+          registry-url: https://registry.npmjs.org
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - run: python setup.py build sdist
         working-directory: sdk/python
       - uses: pypa/gh-action-pypi-publish@master

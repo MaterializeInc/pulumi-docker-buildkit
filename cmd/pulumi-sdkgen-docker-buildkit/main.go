@@ -24,6 +24,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/cmdutil"
 
 	"github.com/pkg/errors"
+	jsgen "github.com/pulumi/pulumi/pkg/v3/codegen/nodejs"
 	pygen "github.com/pulumi/pulumi/pkg/v3/codegen/python"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 )
@@ -147,6 +148,7 @@ func run(version string) error {
 		},
 		Language: map[string]json.RawMessage{
 			"python": json.RawMessage("{}"),
+			"nodejs": json.RawMessage(`{"packageName": "@materializeinc/pulumi-docker-buildkit"}`),
 		},
 	}
 	ppkg, err := schema.ImportSpec(spec, nil)
@@ -156,13 +158,29 @@ func run(version string) error {
 
 	toolDescription := "the Pulumi SDK Generator"
 	extraFiles := map[string][]byte{}
-	files, err := pygen.GeneratePackage(toolDescription, ppkg, extraFiles)
+
+	pyFiles, err := pygen.GeneratePackage(toolDescription, ppkg, extraFiles)
 	if err != nil {
 		return fmt.Errorf("generating python package: %v", err)
 	}
+	if err := writeFiles(filepath.Join("sdk", "python"), pyFiles); err != nil {
+		return err
+	}
 
+	jsFiles, err := jsgen.GeneratePackage(toolDescription, ppkg, extraFiles)
+	if err != nil {
+		return fmt.Errorf("generating python package: %v", err)
+	}
+	if err := writeFiles(filepath.Join("sdk", "nodejs"), jsFiles); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func writeFiles(base string, files map[string][]byte) error {
 	for path, contents := range files {
-		path = filepath.Join("sdk", "python", path)
+		path = filepath.Join(base, path)
 		if err := tools.EnsureFileDir(path); err != nil {
 			return fmt.Errorf("creating directory: %v", err)
 		}
@@ -170,6 +188,5 @@ func run(version string) error {
 			return fmt.Errorf("writing file: %v", err)
 		}
 	}
-
 	return nil
 }
