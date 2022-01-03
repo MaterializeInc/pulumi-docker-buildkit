@@ -148,7 +148,7 @@ func run(version string) error {
 		Language: map[string]schema.RawMessage{
 			"python": schema.RawMessage("{}"),
 			"nodejs": schema.RawMessage(`{
-				"packageName": "@materializeinc/docker-buildkit",
+				"packageName": "@materializeinc/pulumi-docker-buildkit",
 				"dependencies": {
 					"@pulumi/pulumi": "^3.0.0"
 				}
