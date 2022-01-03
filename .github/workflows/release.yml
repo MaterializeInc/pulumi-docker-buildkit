@@ -29,6 +29,7 @@ jobs:
           node-version: 16.x
           registry-url: https://registry.npmjs.org
       - run: npm publish
+        working-directory: sdk/nodejs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - run: python setup.py build sdist
