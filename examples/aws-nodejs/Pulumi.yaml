@@ -1,0 +1,4 @@
+name: docker-buildkit-aws-typescript
+description: Demonstrate Docker Buildkit usage with AWS and TypeScript.
+runtime:
+  name: nodejs
