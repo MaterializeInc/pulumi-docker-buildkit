@@ -149,6 +149,7 @@ func run(version string) error {
 			"python": schema.RawMessage("{}"),
 			"nodejs": schema.RawMessage(`{
 				"packageName": "@materializeinc/pulumi-docker-buildkit",
+				"packageDescription": "A Pulumi provider that builds and pushes a Docker image to a registry using Buildkit.",
 				"dependencies": {
 					"@pulumi/pulumi": "^3.0.0"
 				}
