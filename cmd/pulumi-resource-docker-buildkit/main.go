@@ -382,17 +382,26 @@ func (ch *contextHash) hexSum() string {
 }
 
 func hashContext(contextPath string, dockerfile string) (string, error) {
-	dockerIgnore, err := os.ReadFile(filepath.Join(contextPath, ".dockerignore"))
-	if err != nil && !os.IsNotExist(err) {
-		return "", fmt.Errorf("unable to read .dockerignore file: %w", err)
+	dockerIgnorePath := dockerfile + ".dockerignore"
+	dockerIgnore, err := os.ReadFile(dockerIgnorePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			dockerIgnorePath = filepath.Join(contextPath, ".dockerignore")
+			dockerIgnore, err = os.ReadFile(dockerIgnorePath)
+			if err != nil && !os.IsNotExist(err) {
+				return "", fmt.Errorf("unable to read %s file: %w", dockerIgnorePath, err)
+			}
+		} else {
+			return "", fmt.Errorf("unable to read %s file: %w", dockerIgnorePath, err)
+		}
 	}
 	ignorePatterns, err := dockerignore.ReadAll(bytes.NewReader(dockerIgnore))
 	if err != nil {
-		return "", fmt.Errorf("unable to parse .dockerignore file: %w", err)
+		return "", fmt.Errorf("unable to parse %s file: %w", dockerIgnorePath, err)
 	}
 	ignoreMatcher, err := fileutils.NewPatternMatcher(ignorePatterns)
 	if err != nil {
-		return "", fmt.Errorf("unable to load rules from .dockerignore: %w", err)
+		return "", fmt.Errorf("unable to load rules from %s: %w", dockerIgnorePath, err)
 	}
 	ch := newContextHash(contextPath)
 	err = ch.hashPath(dockerfile, 0)
@@ -412,7 +421,7 @@ func hashContext(contextPath string, dockerfile string) (string, error) {
 		}
 		ignore, err := ignoreMatcher.Matches(path)
 		if err != nil {
-			return fmt.Errorf(".dockerignore rule failed: %w", err)
+			return fmt.Errorf("%s rule failed: %w", dockerIgnorePath, err)
 		}
 		if ignore {
 			if d.IsDir() {
