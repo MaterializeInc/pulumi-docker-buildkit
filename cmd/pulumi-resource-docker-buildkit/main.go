@@ -232,6 +232,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 	baseName := strings.Split(name, ":")[0]
 	context := inputs["context"].StringValue()
 	dockerfile := inputs["dockerfile"].StringValue()
+	target := inputs["target"].StringValue()
 	registry := inputs["registry"].ObjectValue()
 	username := registry["username"]
 	password := registry["password"]
@@ -269,6 +270,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		"--cache-from", name,
 		"--cache-to", "type=inline",
 		"-f", filepath.Join(context, dockerfile),
+		"--target", target,
 		"-t", name, "--push",
 		context,
 	)

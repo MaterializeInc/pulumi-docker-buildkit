@@ -84,10 +84,15 @@ func run(version string) error {
 							Description: "The URL of the registry server hosting the image.",
 							TypeSpec:    schema.TypeSpec{Type: "string"},
 						},
+						"target": {
+							Description: "The name of the target stage to build in the Dockerfile.",
+							TypeSpec:    schema.TypeSpec{Type: "string"},
+						},
 					},
 					Required: []string{
 						"dockerfile", "context", "name", "platforms",
 						"contextDigest", "repoDigest", "registryServer",
+						"target",
 					},
 				},
 				InputProperties: map[string]schema.PropertySpec{
@@ -117,6 +122,11 @@ func run(version string) error {
 							Type:  "array",
 							Items: &schema.TypeSpec{Type: "string"},
 						},
+					},
+					"target": {
+						Description: "The name of the target stage to build in the Dockerfile.",
+						TypeSpec:    schema.TypeSpec{Type: "string"},
+						Default:     "",
 					},
 				},
 				RequiredInputs: []string{"name", "registry"},
