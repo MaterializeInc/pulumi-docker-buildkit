@@ -298,6 +298,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 	outputs := map[string]interface{}{
 		"dockerfile":     dockerfile,
 		"context":        context,
+		"target":         target,
 		"name":           name,
 		"platforms":      platforms,
 		"contextDigest":  contextDigest,
