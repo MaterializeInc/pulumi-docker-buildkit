@@ -1,5 +1,5 @@
 import * as aws from "@pulumi/aws";
-import * as dockerBuildkit from "@MaterializeInc/pulumi-docker-buildkit";
+import * as dockerBuildkit from "@materializeinc/pulumi-docker-buildkit";
 
 const repo = new aws.ecr.Repository("repo");
 
