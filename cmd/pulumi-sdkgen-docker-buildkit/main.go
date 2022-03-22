@@ -151,7 +151,7 @@ func run(version string) error {
 							TypeSpec:    schema.TypeSpec{Type: "string"},
 						},
 					},
-					Required: []string{"server", "username", "password"},
+					Required: []string{"server"},
 				},
 			},
 		},
