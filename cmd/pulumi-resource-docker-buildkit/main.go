@@ -264,15 +264,28 @@ func (k *dockerBuildkitProvider) dockerBuild(
 	for _, v := range inputs["platforms"].ArrayValue() {
 		platforms = append(platforms, v.StringValue())
 	}
-	cmd := exec.Command(
-		"docker", "buildx", "build",
+
+	var arguments []string = []string{
+		"buildx", "build",
 		"--platform", strings.Join(platforms, ","),
 		"--cache-from", name,
 		"--cache-to", "type=inline",
 		"-f", filepath.Join(context, dockerfile),
 		"--target", target,
 		"-t", name, "--push",
-		context,
+	}
+
+	if !inputs["args"].IsNull() {
+		for _, v := range inputs["args"].ArrayValue() {
+			arguments = append(arguments, "--build-arg")
+			arguments = append(arguments, fmt.Sprintf("%s=%s", v.ObjectValue()["key"].StringValue(), v.ObjectValue()["value"].StringValue()))
+		}
+	}
+
+	arguments = append(arguments, context)
+
+	cmd := exec.Command(
+		"docker", arguments...,
 	)
 	if err := runCommand(ctx, k.host, urn, cmd); err != nil {
 		return nil, fmt.Errorf("docker build failed: %w", err)
