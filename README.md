@@ -62,14 +62,5 @@ whether to invoke `docker build`. This is fast, unless you have tens of
 thousands of files in your build context. The `.git` directory and
 `node_modules` are the usual culprits.
 
-## Future plans
-
-I plan to make minor bugfixes as necessary for our use of this provider at
-[@MaterializeInc](https://github.com/MaterializeInc). I do not currently plan to
-bring it to feature parity with the official Docker provider, nor do I have the
-time to entertain such contributions. Sorry! I encourage you to either fork this
-repository or to use the ideas here to improve the official Pulumi Docker
-provider.
-
 [pulumi-docker]: https://github.com/pulumi/pulumi-docker
 [Buildkit]: http://github.com/moby/buildkit
