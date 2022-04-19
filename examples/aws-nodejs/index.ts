@@ -12,5 +12,9 @@ const registryInfo = repo.registryId.apply(async id => {
 
 export const image = new dockerBuildkit.Image(
     "image",
-    { name: repo.repositoryUrl, registry: registryInfo },
+    {
+        name: repo.repositoryUrl,
+        registry: registryInfo,
+        args: [{name: "command", value: "true"}],
+    },
 ).repoDigest;
