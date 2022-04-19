@@ -128,6 +128,15 @@ func run(version string) error {
 						TypeSpec:    schema.TypeSpec{Type: "string"},
 						Default:     "",
 					},
+					"args": {
+						Description: "The build arguments.",
+						TypeSpec: schema.TypeSpec{
+							Type: "array",
+							Items: &schema.TypeSpec{
+								Ref: "#/types/docker-buildkit:index:BuildArg",
+							},
+						},
+					},
 				},
 				RequiredInputs: []string{"name", "registry"},
 			},
@@ -152,6 +161,23 @@ func run(version string) error {
 						},
 					},
 					Required: []string{"server"},
+				},
+			},
+			"docker-buildkit:index:BuildArg": {
+				ObjectTypeSpec: schema.ObjectTypeSpec{
+					Description: "Describes a Docker build argument.",
+					Type:        "object",
+					Properties: map[string]schema.PropertySpec{
+						"name": {
+							Description: "The name of the Docker build argument.",
+							TypeSpec:    schema.TypeSpec{Type: "string"},
+						},
+						"value": {
+							Description: "The value of the Docker build argument.",
+							TypeSpec:    schema.TypeSpec{Type: "string"},
+						},
+					},
+					Required: []string{"name", "value"},
 				},
 			},
 		},
