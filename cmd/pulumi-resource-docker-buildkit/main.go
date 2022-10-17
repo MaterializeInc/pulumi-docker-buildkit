@@ -274,7 +274,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		"--target", target,
 		"-t", name, "--push",
 	}
-	var buildArgs []map[string]string
+	buildArgs := []map[string]string{}
 	if !inputs["args"].IsNull() {
 		for _, v := range inputs["args"].ArrayValue() {
 			name := v.ObjectValue()["name"].StringValue()
