@@ -274,11 +274,13 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		"--target", target,
 		"-t", name, "--push",
 	}
+	var buildArgs []map[string]string
 	if !inputs["args"].IsNull() {
 		for _, v := range inputs["args"].ArrayValue() {
 			name := v.ObjectValue()["name"].StringValue()
 			value := v.ObjectValue()["value"].StringValue()
 			args = append(args, "--build-arg", fmt.Sprintf("%s=%s", name, value))
+			buildArgs = append(buildArgs, map[string]string{"name": name, "value": value})
 		}
 	}
 	args = append(args, context)
@@ -312,6 +314,7 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		"platforms":      platforms,
 		"contextDigest":  contextDigest,
 		"repoDigest":     repoDigest,
+		"args":           buildArgs,
 		"registryServer": registry["server"].StringValue(),
 	}
 	return plugin.MarshalProperties(
