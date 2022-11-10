@@ -158,6 +158,7 @@ func run(version string) error {
 						"password": {
 							Description: "The password to authenticate with.",
 							TypeSpec:    schema.TypeSpec{Type: "string"},
+							Secret:      true,
 						},
 					},
 					Required: []string{"server"},
