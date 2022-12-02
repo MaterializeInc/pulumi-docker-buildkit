@@ -38,6 +38,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/cmdutil"
 	rpc "github.com/pulumi/pulumi/sdk/v3/proto/go"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // Injected by linker in release builds.
@@ -57,6 +58,15 @@ func main() {
 type dockerBuildkitProvider struct {
 	host      *provider.HostClient
 	loginLock sync.Mutex
+}
+
+func (p *dockerBuildkitProvider) Attach(context context.Context, req *rpc.PluginAttach) (*emptypb.Empty, error) {
+	host, err := provider.NewHostClient(req.GetAddress())
+	if err != nil {
+		return nil, err
+	}
+	p.host = host
+	return &pbempty.Empty{}, nil
 }
 
 func (k *dockerBuildkitProvider) Call(ctx context.Context, req *rpc.CallRequest) (*rpc.CallResponse, error) {
