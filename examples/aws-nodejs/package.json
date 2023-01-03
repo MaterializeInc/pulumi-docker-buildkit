@@ -4,8 +4,8 @@
         "@types/node": "^10.0.0"
     },
     "dependencies": {
-        "@pulumi/aws": "^4.17.0",
-        "@pulumi/pulumi": "^3.21.0",
+        "@pulumi/aws": "^5.25.0",
+        "@pulumi/pulumi": "^3.50.2",
         "@materializeinc/pulumi-docker-buildkit": "file:../../sdk/nodejs"
     }
 }

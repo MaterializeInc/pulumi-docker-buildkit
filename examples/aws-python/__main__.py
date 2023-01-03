@@ -14,7 +14,10 @@ def get_registry_info(registry_id):
     )
 
 
-repo = aws.ecr.Repository("repo")
+repo = aws.ecr.Repository(
+    "repo",
+    force_delete=True,
+)
 image = docker_buildkit.Image(
     "image",
     name=repo.repository_url,
