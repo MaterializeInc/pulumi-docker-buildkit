@@ -15,6 +15,7 @@ sdk: bin/pulumi-sdkgen-docker-buildkit
 		awk -f ../../build/munge-package-json.awk -v version=$(VERSION) package.json > bin/package.json
 	mv sdk/nodejs sdk/nodejs.tmp
 	mv sdk/nodejs.tmp/bin sdk/nodejs
+	mv sdk/nodejs.tmp/scripts sdk/nodejs
 	rm -r sdk/nodejs.tmp
 	cp README.md sdk/python/
 	cp README.md sdk/nodejs/
