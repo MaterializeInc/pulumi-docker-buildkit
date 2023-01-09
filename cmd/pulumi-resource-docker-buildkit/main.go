@@ -275,11 +275,21 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		platforms = append(platforms, v.StringValue())
 	}
 
+	cacheFrom := name
+	if !inputs["cacheFrom"].IsNull() {
+			index = inputs["cacheFrom"]
+	}
+
+	cacheTo := "type=inline"
+	if !inputs["cacheTo"].IsNull() {
+			index = inputs["cacheTo"]
+	}
+
 	args := []string{
 		"buildx", "build",
 		"--platform", strings.Join(platforms, ","),
-		"--cache-from", name,
-		"--cache-to", "type=inline",
+		"--cache-from", cacheFrom,
+		"--cache-to", cacheTo,
 		"-f", filepath.Join(context, dockerfile),
 		"--target", target,
 		"-t", name, "--push",
@@ -325,6 +335,8 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		"contextDigest":  contextDigest,
 		"repoDigest":     repoDigest,
 		"registryServer": registry["server"].StringValue(),
+		"cacheFrom":      cacheFrom,
+		"cacheTo":        cacheTo,
 	}
 	if buildArgs != nil {
 		outputs["args"] = buildArgs
