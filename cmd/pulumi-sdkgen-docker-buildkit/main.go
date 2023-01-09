@@ -88,6 +88,14 @@ func run(version string) error {
 							Description: "The name of the target stage to build in the Dockerfile.",
 							TypeSpec:    schema.TypeSpec{Type: "string"},
 						},
+						"cacheFrom": {
+							Description: "Value for --cache-from when executing docker buildx, default to image name",
+							TypeSpec:    schema.TypeSpec{Type: "string"},
+						},
+						"cacheTo": {
+							Description: "Value for --cache-to when executing docker buildx, default to type=inline",
+							TypeSpec:    schema.TypeSpec{Type: "string"},
+						},
 					},
 					Required: []string{
 						"dockerfile", "context", "name", "platforms",

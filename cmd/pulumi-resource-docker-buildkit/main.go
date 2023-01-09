@@ -335,6 +335,8 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		"contextDigest":  contextDigest,
 		"repoDigest":     repoDigest,
 		"registryServer": registry["server"].StringValue(),
+		"cacheFrom":      cacheFrom,
+		"cacheTo":        cacheTo,
 	}
 	if buildArgs != nil {
 		outputs["args"] = buildArgs
