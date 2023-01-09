@@ -128,6 +128,14 @@ func run(version string) error {
 						TypeSpec:    schema.TypeSpec{Type: "string"},
 						Default:     "",
 					},
+					"cacheFrom": {
+						Description: "Value for --cache-from when executing docker buildx, default to image name",
+						TypeSpec:    schema.TypeSpec{Type: "string"},
+					},
+					"cacheTo": {
+						Description: "Value for --cache-to when executing docker buildx, default to type=inline",
+						TypeSpec:    schema.TypeSpec{Type: "string"},
+					},
 					"args": {
 						Description: "The build arguments.",
 						TypeSpec: schema.TypeSpec{
