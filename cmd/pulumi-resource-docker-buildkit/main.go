@@ -275,15 +275,13 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		platforms = append(platforms, v.StringValue())
 	}
 
-	cacheFrom := name
-	if !inputs["cacheFrom"].IsNull() {
-			index = inputs["cacheFrom"]
+	var cacheFrom string
+	if inputs["cacheFrom"].IsNull() {
+		cacheFrom = name
+	} else {
+		cacheFrom = inputs["cacheFrom"].StringValue()
 	}
-
-	cacheTo := "type=inline"
-	if !inputs["cacheTo"].IsNull() {
-			index = inputs["cacheTo"]
-	}
+	cacheTo := inputs["cacheTo"].StringValue()
 
 	args := []string{
 		"buildx", "build",
@@ -335,11 +333,13 @@ func (k *dockerBuildkitProvider) dockerBuild(
 		"contextDigest":  contextDigest,
 		"repoDigest":     repoDigest,
 		"registryServer": registry["server"].StringValue(),
-		"cacheFrom":      cacheFrom,
 		"cacheTo":        cacheTo,
 	}
 	if buildArgs != nil {
 		outputs["args"] = buildArgs
+	}
+	if !inputs["cacheFrom"].IsNull() {
+		outputs["cacheFrom"] = inputs["cacheFrom"].StringValue()
 	}
 	return plugin.MarshalProperties(
 		resource.NewPropertyMapFromMap(outputs),

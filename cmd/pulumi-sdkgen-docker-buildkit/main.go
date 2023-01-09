@@ -89,11 +89,11 @@ func run(version string) error {
 							TypeSpec:    schema.TypeSpec{Type: "string"},
 						},
 						"cacheFrom": {
-							Description: "Value for --cache-from when executing docker buildx, default to image name",
+							Description: "An external cache source to use for the build. Defaults to the name of the image.",
 							TypeSpec:    schema.TypeSpec{Type: "string"},
 						},
 						"cacheTo": {
-							Description: "Value for --cache-to when executing docker buildx, default to type=inline",
+							Description: "An external cache destination to export the build cache to.",
 							TypeSpec:    schema.TypeSpec{Type: "string"},
 						},
 					},
@@ -137,12 +137,13 @@ func run(version string) error {
 						Default:     "",
 					},
 					"cacheFrom": {
-						Description: "Value for --cache-from when executing docker buildx, default to image name",
+						Description: "An external cache source to use for the build. Defaults to the name of the image.",
 						TypeSpec:    schema.TypeSpec{Type: "string"},
 					},
 					"cacheTo": {
-						Description: "Value for --cache-to when executing docker buildx, default to type=inline",
+						Description: "An external cache destination to export the build cache to.",
 						TypeSpec:    schema.TypeSpec{Type: "string"},
+						Default:     "type=inline",
 					},
 					"args": {
 						Description: "The build arguments.",
