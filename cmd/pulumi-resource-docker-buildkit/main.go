@@ -397,19 +397,30 @@ func newContextHash(contextPath string) *contextHash {
 }
 
 func (ch *contextHash) hashPath(path string, fileMode fs.FileMode) error {
-	f, err := os.Open(filepath.Join(ch.contextPath, path))
-	if err != nil {
-		return fmt.Errorf("open %s: %w", path, err)
-	}
-	defer f.Close()
-	h := sha256.New()
-	_, err = io.Copy(h, f)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
-	}
 	ch.input.Write([]byte(path))
 	ch.input.Write([]byte(fileMode.String()))
-	ch.input.Write(h.Sum(nil))
+
+	fullpath := filepath.Join(ch.contextPath, path)
+	if fileMode.IsRegular() {
+		f, err := os.Open(fullpath)
+		if err != nil {
+			return fmt.Errorf("open %s: %w", path, err)
+		}
+		defer f.Close()
+		h := sha256.New()
+		_, err = io.Copy(h, f)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", path, err)
+		}
+		ch.input.Write(h.Sum(nil))
+	} else if fileMode&fs.ModeSymlink != 0 {
+		dest, err := os.Readlink(fullpath)
+		if err != nil {
+			return fmt.Errorf("readlink %s:")
+		}
+		ch.input.Write([]byte(dest))
+	}
+
 	ch.input.WriteByte(0)
 	return nil
 }
@@ -475,12 +486,9 @@ func hashContext(contextPath string, dockerfile string) (string, error) {
 		if err != nil {
 			return fmt.Errorf("determining mode for %q: %w", path, err)
 		}
-		mode := info.Mode()
-		if mode.IsRegular() || mode == fs.ModeSymlink {
-			err = ch.hashPath(path, info.Mode())
-			if err != nil {
-				return fmt.Errorf("hashing %q: %w", path, err)
-			 }
+		err = ch.hashPath(path, info.Mode())
+		if err != nil {
+			return fmt.Errorf("hashing %q: %w", path, err)
 		}
 		return nil
 	})
