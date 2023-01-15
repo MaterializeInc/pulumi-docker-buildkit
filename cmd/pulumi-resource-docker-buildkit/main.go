@@ -475,9 +475,12 @@ func hashContext(contextPath string, dockerfile string) (string, error) {
 		if err != nil {
 			return fmt.Errorf("determining mode for %q: %w", path, err)
 		}
-		err = ch.hashPath(path, info.Mode())
-		if err != nil {
-			return fmt.Errorf("hashing %q: %w", path, err)
+		mode := info.Mode()
+		if mode.IsRegular() || mode == fs.ModeSymlink {
+			err = ch.hashPath(path, info.Mode())
+			if err != nil {
+				return fmt.Errorf("hashing %q: %w", path, err)
+			 }
 		}
 		return nil
 	})
