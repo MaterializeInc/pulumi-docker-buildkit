@@ -1,5 +1,12 @@
 # Docker Buildkit Pulumi Provider
 
+> **Warning**
+>
+> This provider is **DEPRECATED.** The official [pulumi-docker] provider
+> includes these enhancements—and more—as of v4.0.
+>
+> [**Read the announcement blog post.**](https://www.pulumi.com/blog/build-images-50x-faster-docker-v4/)
+
 A [Pulumi](https://pulumi.com) provider that builds and pushes a Docker image to
 a registry using [Buildkit].
 
